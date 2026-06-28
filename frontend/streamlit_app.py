@@ -640,7 +640,7 @@ if "last_transaction" not in st.session_state:
 
 if submitted:
     try:
-        response = requests.post( "https://fraudshield-intelligence.onrender.com/", json=payload)
+        response = requests.post( "https://fraudshield-intelligence.onrender.com/predict", json=payload)
         if response.status_code != 200:
             st.error(f"FastAPI Error ({response.status_code})")
             st.code(response.text)
