@@ -1,0 +1,34 @@
+# Ignore dataset contents
+dataset/*
+!dataset/README.md
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environments
+.venv/
+venv/
+
+# macOS
+.DS_Store
+
+# VS Code
+.vscode/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Environment
+.env
+
+# Logs
+*.log
+
+# Build
+build/
+dist/
+
+# Python cache
+.pytest_cache/
