@@ -1,8 +1,8 @@
 <h1 align="center">FraudShield Intelligence</h1>
 
 <p align="center">
-  Real-time fraud detection on 6.3M mobile money transactions.<br>
-  XGBoost behind a FastAPI service, with a Streamlit dashboard for scoring and explanations.
+  Fraud detection on 6.3M mobile money transactions.<br>
+  XGBoost and SHAP behind a FastAPI service, with a Streamlit dashboard.
 </p>
 
 <p align="center">
@@ -19,45 +19,13 @@
 
 ---
 
-## About
+Enter a transaction, get back a fraud probability, an alert decision, and the
+five features that drove it.
 
-**FraudShield Intelligence** is an end-to-end fraud detection system built on
-the PaySim mobile money dataset: 6,362,620 transactions with a 0.129% fraud
-rate.
-
-It covers the full path from raw data to a running service. An XGBoost
-classifier is trained with a time based split, PR-AUC as the headline metric,
-and a decision threshold chosen by expected cost rather than left at 0.5. The
-model is served by a FastAPI endpoint that returns a fraud probability, an
-alert decision and the SHAP values behind it, and a Streamlit dashboard sits
-on top for trying it out. Both services are containerised, and GitHub Actions
-runs the tests and builds the images on every push.
-
-The repository also documents something that turned up during training: PaySim
-generates fraud by emptying the sender's account, which makes the two classes
-separable by a two line rule. Rather than reporting the near perfect score that
-follows from that, `train.py` benchmarks the model against the rule on every
-run and refits without the features that encode it, so the gap is visible. See
-[what I found in the dataset](#what-i-found-in-the-dataset).
-
-PaySim is simulated data rather than real transactions, so the numbers here
-are a ceiling rather than an estimate.
-
----
-
-## Screenshots
-
-**Scoring a transaction**
+Trained on [PaySim](https://www.kaggle.com/datasets/ealaxi/paysim1): 6,362,620
+simulated mobile money transactions, 8,213 of them fraud (0.129%).
 
 <img width="1708" alt="Risk console" src="https://github.com/user-attachments/assets/074bcbfe-bc18-4a4a-834a-e56afca6f262" />
-
-**Result and risk score**
-
-<img width="1709" alt="Prediction result" src="https://github.com/user-attachments/assets/fb83b3f0-26b2-428a-b0f2-98038d0fea22" />
-
-**SHAP feature attribution**
-
-<img width="680" alt="SHAP explanation" src="https://github.com/user-attachments/assets/1562f901-f5af-436e-9cd3-b8260fae4c1f" />
 
 ---
 
@@ -89,69 +57,66 @@ Same model trained on a random split instead scores 0.9928 PR-AUC against 0.9998
 
 ---
 
-## What I found in the dataset
+## The dataset has a shortcut in it
 
-This is the part I'd most want someone to read.
+My first training run came back with 100% precision and 100% recall. That
+isn't a thing that happens, so I went looking for the reason.
 
-My first proper training run came back with 100% precision and 100% recall,
-which is not something that happens. So I went looking for the reason.
-
-PaySim creates a fraudulent transaction by emptying the sender's account.
+PaySim generates a fraudulent transaction by emptying the sender's account.
 Across all 6.3M rows:
 
-| Condition | Fraud | Not fraud |
+| `oldbalanceOrg == amount` and `newbalanceOrig == 0` | Fraud | Not fraud |
 |---|---|---|
-| `oldbalanceOrg == amount` and `newbalanceOrig == 0` | **97.7%** | **0.0%** |
+| Share of rows matching | **97.7%** | **0.0%** |
 
-The two classes come apart with a two line `if` statement. Any model given
-features built on top of that will look close to perfect without having
-learned anything about fraud.
+The classes separate with a two line `if` statement. Any model given features
+built on that looks near perfect without having learned anything about fraud.
 
-So `train.py` now does two extra things on every run:
+So every training run now reports two extra things:
 
-1. Scores that rule on its own and reports it next to the model, so there's
-   always something to compare against.
-2. Refits without the three balance features that encode the rule, which shows
-   how much of the score came from the simulator rather than the model.
+1. **A rule baseline.** That `if` statement scored as if it were a model, so
+   there is always something to beat.
+2. **An ablation.** The same model refit without the three balance features
+   that encode the rule, which shows how much of the score came from the
+   simulator.
 
-Both numbers are in the [results](#results) above.
+Both are in the [results](#results) above.
 
-I'm keeping this near the top instead of in a limitations section, because a
-near perfect score on a public dataset is usually the dataset's doing. The
-parts of this project that would still hold up on real transactions are the
-threshold logic and the evaluation setup, not the accuracy.
-
----
-
-## What I changed after the first version
-
-The original notebook is still in `notebook/`, but it isn't how the model gets
-trained anymore. Three things in it were wrong for this problem.
-
-**The split was random.** `step` is an hour counter over a 30 day simulation,
-so a random split trains on hour 500 and tests on hour 200. No real fraud
-system gets to see the future. `train.py` splits on time.
-
-**Accuracy and F1 at a 0.5 threshold.** Only 0.129% of rows are fraud, so a
-model that always answers "not fraud" is 99.87% accurate. The main metric is
-now PR-AUC, which actually moves when the model improves.
-
-**The imbalance was never handled.** The notebook says a workaround is needed
-and then doesn't apply one. `train.py` tunes `scale_pos_weight` against
-validation PR-AUC.
-
-I also stopped using 0.5 as the cutoff. Missing a fraud costs the full
-transaction amount and a false alarm costs one analyst review, which are
-nowhere near equal, so `train.py` sweeps thresholds against a cost function
-and picks the cheapest.
+This is near the top rather than buried in limitations, because a near perfect
+score on a public dataset is usually the dataset's doing. What would still
+hold up on real transactions is the evaluation setup and the threshold logic,
+not the accuracy.
 
 ---
 
-## Model comparison
+## How it is trained
 
-From the notebook, trained on the original random split. I'm keeping this
-because the comparison is still useful, but these numbers come from the split
-I later replaced, so they don't line up with the results section above.
+Three decisions, and why:
+
+**Split on time, not at random.** `step` is an hour counter over a 30 day
+simulation. A random split trains on hour 500 and tests on hour 200, which no
+deployed system ever gets to do. Training uses the earliest 60% of rows,
+validation the next 20%, test the last 20%.
+
+**PR-AUC as the headline metric.** At a 0.129% fraud rate, a model that always
+answers "not fraud" is 99.87% accurate, and ROC-AUC sits near the top of its
+range regardless. Average precision is the one that moves when the model
+improves.
+
+**A threshold chosen by cost.** Missing a fraud costs the full transaction
+amount. A false alarm costs one analyst review, set at $25. Those are nowhere
+near equal, so `train.py` sweeps candidate thresholds against that cost
+function and picks the cheapest instead of leaving it at 0.5.
+
+Class imbalance is handled by tuning `scale_pos_weight` against validation
+PR-AUC.
+
+---
+
+## Models tried
+
+From the original notebook, on the random split I later replaced. Kept for the
+comparison, but not comparable to the results above.
 
 | Metric | Logistic Regression | Random Forest | XGBoost |
 |---|---|---|---|
@@ -161,36 +126,38 @@ I later replaced, so they don't line up with the results section above.
 | F1 | 55.66% | 87.24% | **90.98%** |
 | False negatives | 1,070 | 446 | **292** |
 
-XGBoost won on recall and F1, which is what matters when the classes are this
-imbalanced, so that's what the app uses.
+XGBoost won on recall and F1, which is what matters at this level of
+imbalance.
 
 ---
 
 ## Architecture
 
 ```
-  Streamlit dashboard                FastAPI service
-  (Streamlit Cloud)      ------->    (Render)
-  :8501                  POST        :8000
-                         /predict         |
-                                          v
-                                   XGBoost model
-                                   + SHAP explainer
-                                          |
-                                          v
-                            probability, decision, top 5 factors
+Streamlit dashboard                FastAPI service
+(Streamlit Cloud)  ──────────────► (Render)
+:8501               POST /predict   :8000
+                                        │
+                                        ▼
+                                 XGBoost + SHAP
+                                        │
+                                        ▼
+                         probability · decision · top 5 factors
 ```
 
-`backend/features.py` builds the features, and both training and serving
-import it, so a feature can't get built one way during training and another
-way at prediction time. There's a test that checks the two paths agree.
+| Endpoint | Returns |
+|---|---|
+| `POST /predict` | Fraud probability, alert decision, expected loss, SHAP factors |
+| `GET /health` | Which model is loaded and whether SHAP is working |
 
-The model bundle also records which columns it was fitted on, and the API
-serves exactly those.
+`backend/features.py` builds the features and is imported by both training and
+serving, so a feature cannot be computed one way at training time and another
+at prediction time. A test checks the two paths agree. The saved model also
+records which columns it was fitted on, and the API serves exactly those.
 
 ---
 
-## Input features
+## Features
 
 Eight fields go in:
 
@@ -203,36 +170,21 @@ Eight fields go in:
 | Receiver balance before / after | Receiver's balance either side of the transaction |
 | Flagged fraud | Rule based flag from the source system |
 
-From those, the model builds five more:
+Five more are derived from them:
 
-| Derived feature | Why |
+| Derived | Why it exists |
 |---|---|
-| Hour of day | `step` raw doesn't survive a time based split, since every test value sits outside the training range |
+| Hour of day | Raw `step` doesn't survive a time based split, since every test value falls outside the training range |
 | Sender ledger mismatch | Balances should satisfy `new = old - amount`. Fraud rows often don't |
-| Receiver ledger mismatch | Same on the receiving side |
+| Receiver ledger mismatch | The same check on the receiving side |
 | Sender emptied | Whether the account went to exactly zero |
-| Amount vs sender balance | How much of the balance the transaction moved |
-
----
-
-## Tech stack
-
-| Area | Tools |
-|---|---|
-| Language | Python 3.12 |
-| Modelling | XGBoost, scikit-learn, pandas, NumPy |
-| Explainability | SHAP |
-| Backend | FastAPI, Uvicorn, Pydantic |
-| Frontend | Streamlit |
-| Containers | Docker, Docker Compose |
-| CI | GitHub Actions, pytest, ruff |
-| Hosting | Render (API), Streamlit Community Cloud (dashboard) |
+| Amount vs sender balance | How much of the available balance moved |
 
 ---
 
 ## Getting started
 
-### Docker
+**Docker**
 
 ```bash
 docker compose up --build
@@ -240,48 +192,39 @@ docker compose up --build
 
 Dashboard on <http://localhost:8501>, API docs on <http://localhost:8000/docs>.
 
-### Local
+**Local**
 
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -r backend/requirements-dev.txt -r frontend/requirements.txt
 ```
 
-Start the API:
-
 ```bash
 cd backend && uvicorn app:app --reload
 ```
-
-Start the dashboard in a second terminal:
 
 ```bash
 cd frontend && API_URL=http://127.0.0.1:8000 streamlit run streamlit_app.py
 ```
 
-### Retraining
+**Retraining**
 
-The trained model is committed, so you only need the dataset if you want to
-retrain. Download [PaySim](https://www.kaggle.com/datasets/ealaxi/paysim1)
-into `dataset/`, then:
+The trained model is committed, so the dataset is only needed to retrain.
+Download [PaySim](https://www.kaggle.com/datasets/ealaxi/paysim1) into
+`dataset/`, then:
 
 ```bash
 cd backend && python train.py
-python ../scripts/update_readme_metrics.py
 ```
-
-Useful flags:
 
 | Flag | Effect |
 |---|---|
 | `--review-cost 50` | Change what a false alarm costs. The threshold moves with it |
-| `--feature-set realistic` | Drop the balance features that give the simulator away |
-| `--compare-random-split` | Also train on a random split, to compare |
+| `--feature-set realistic` | Drop the balance features that encode the shortcut |
+| `--compare-random-split` | Also train on a random split, for comparison |
 | `--nrows 500000` | Train on a slice, for a quick run |
 
----
-
-## Tests
+**Tests**
 
 ```bash
 cd backend && python -m pytest
@@ -289,7 +232,7 @@ cd backend && python -m pytest
 
 27 tests covering feature building, the time based split, the threshold sweep
 against a brute force version, the rule baseline, and the API. GitHub Actions
-runs these plus ruff on every push, and builds both Docker images.
+runs these plus ruff on every push and builds both images.
 
 ---
 
@@ -302,8 +245,8 @@ runs these plus ruff on every push, and builds both Docker images.
 | `RATE_LIMIT_PER_MINUTE` | `120` | Per IP cap on `/predict`. In memory, single worker only |
 | `LOG_LEVEL` | `INFO` | Backend logging |
 
-On Streamlit Cloud there's no way to set environment variables, so the
-dashboard also reads `API_URL` from secrets:
+Streamlit Cloud can't set environment variables, so the dashboard also reads
+`API_URL` from secrets:
 
 ```toml
 API_URL = "https://your-backend.onrender.com"
@@ -313,23 +256,21 @@ API_URL = "https://your-backend.onrender.com"
 
 ## Limitations
 
-- **The data is simulated.** Everything above is a ceiling, not an estimate.
-- **No account history.** Each transaction is scored on its own. A real system
-  would have account age, recent activity, device fingerprints and who the
-  money is going to, which is most of what actually catches fraud.
-- **The review cost is made up.** $25 per alert is a placeholder. Change it and
+- **The data is simulated.** Every number here is a ceiling, not an estimate.
+- **No account history.** Each transaction is scored alone. A real system would
+  have account age, recent activity, device fingerprints and counterparty
+  information, which is most of what actually catches fraud.
+- **The review cost is a placeholder.** $25 per alert is made up. Change it and
   the operating point changes with it.
-- **No fairness testing.** PaySim has no demographic columns, so there was
-  nothing to test. Real data would need this before going near production.
-- **Rate limiting is in process**, so it only holds with a single worker.
-- **SHAP explanations degrade rather than fail.** If the explainer can't run,
-  the API returns `available: false` with a reason instead of a number. An
-  earlier version made up attribution values when SHAP was missing, which is
-  worse than returning nothing.
+- **No fairness testing.** PaySim has no demographic columns. Real data would
+  need this before deployment.
+- **Explanations degrade rather than fail.** If SHAP can't run, the API returns
+  `available: false` with a reason. An earlier version invented attribution
+  numbers when SHAP was missing, which is worse than returning nothing.
 
 ---
 
-## Project structure
+## Structure
 
 ```
 backend/
@@ -339,15 +280,8 @@ backend/
   model/             trained model and metrics
   tests/
 frontend/
-  streamlit_app.py   the dashboard, one page
+  streamlit_app.py   the dashboard
 notebook/            the original exploratory notebook
 scripts/             regenerates the results section of this file
 dataset/             where the Kaggle CSV goes
 ```
-
----
-
-<p align="center">
-  Dataset: <a href="https://www.kaggle.com/datasets/ealaxi/paysim1">PaySim1</a>,
-  6,362,620 transactions, 8,213 of them fraud. Not committed, see <code>dataset/README.md</code>.
-</p>
