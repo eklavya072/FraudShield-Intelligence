@@ -3,8 +3,12 @@ target-version = "py312"
 
 [lint]
 select = ["E", "F", "I", "UP", "B", "W"]
-ignore = ["B008"]  # FastAPI's Depends()/Header() defaults are the documented idiom.
+ignore = ["B008"]  # FastAPI's Depends()/Header() defaults are the documented way.
 
 [lint.per-file-ignores]
-"backend/tests/*" = ["E402"]  # sys.path juggling before imports is deliberate there.
-"frontend/streamlit_app.py" = ["E402"]  # set_page_config must run before other imports.
+"backend/tests/*" = ["E402"]  # sys.path setup has to come before the imports.
+# The dashboard is one long file of markup, left with its original formatting.
+"frontend/streamlit_app.py" = ["E501", "E402"]
+
+[format]
+exclude = ["frontend/streamlit_app.py"]

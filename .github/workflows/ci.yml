@@ -21,7 +21,6 @@ jobs:
         run: |
           pip install -r backend/requirements-dev.txt
           pip install -r frontend/requirements.txt
-          pip install pytest
 
       - name: Lint
         run: ruff check backend frontend scripts
@@ -29,13 +28,9 @@ jobs:
       - name: Format check
         run: ruff format --check backend frontend scripts
 
-      - name: Backend tests
+      - name: Tests
         run: python -m pytest
         working-directory: backend
-
-      - name: Frontend tests
-        run: python -m pytest
-        working-directory: frontend
 
 
   smoke:

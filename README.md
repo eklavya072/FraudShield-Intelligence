@@ -8,8 +8,8 @@
 
 Fraud detection on the PaySim dataset, wrapped in an actual app instead of
 just a notebook. XGBoost model behind a FastAPI service, with a Streamlit
-dashboard on top for scoring transactions, working through alerts, batch
-scoring a file, and checking for drift.
+dashboard on top for scoring a transaction and seeing which features drove
+the score.
 
 **Live:** https://fraudshield-intelligence-evci2hh3g7wzrytqmg848y.streamlit.app
 
@@ -58,9 +58,10 @@ transaction amount, a false alarm costs one analyst review, and those aren't
 close to equal. `train.py` sweeps thresholds against a cost function and picks
 the cheapest one.
 
-The same idea carries into the app: the review queue sorts alerts by expected
-loss (probability x amount) rather than by probability, so a 60% chance on
-$80,000 gets looked at before a 98% chance on $40.
+The API also keeps a record of everything it scores and has endpoints for
+working through the alerts, scoring a file in bulk, and checking whether the
+live data has drifted away from what the model was trained on. The dashboard
+doesn't use those, they're just there in the API.
 
 ## The problem with this dataset
 
@@ -87,7 +88,7 @@ without those features so you can see the difference. Both numbers are below.
 I'm leaving this at the top rather than in a limitations section because a
 near perfect score on a public dataset is usually a property of the dataset.
 The parts of this project that would survive contact with real data are the
-threshold logic, the queue, and the drift monitoring, not the accuracy.
+threshold logic and the drift checking, not the accuracy.
 
 ## Results
 
@@ -164,17 +165,23 @@ relative to the sender's balance. See `backend/features.py`.
 ## How it fits together
 
 ```
-Streamlit dashboard (:8501)          FastAPI service (:8000)
-  Risk console                 --->    POST /predict
-  Review queue                         POST /predict/batch
-  Batch scoring                        GET  /alerts
-  Drift monitor                        POST /alerts/{id}/decision
-  Model card                           GET  /drift, /metrics, /health
+Streamlit dashboard (:8501)  --->  FastAPI service (:8000)
+  single page risk console             POST /predict
                                               |
-                                   XGBoost + SHAP
-                                   SQLite alert queue
-                                   PSI reference profile
+                                       XGBoost + SHAP
+                                       SQLite record of what was scored
 ```
+
+Other endpoints the API exposes, not used by the dashboard:
+
+| Endpoint | What it does |
+|---|---|
+| `POST /predict/batch` | Scores a whole file in one call |
+| `GET /alerts` | Everything above the threshold, sorted by expected loss |
+| `POST /alerts/{id}/decision` | Mark an alert as fraud or a false positive |
+| `GET /drift` | PSI against the training distribution |
+| `GET /metrics` | Full output from the last training run |
+| `GET /health` | What model is loaded, whether SHAP is working |
 
 `backend/features.py` builds the features, and training, single scoring and
 batch scoring all import it. That way a feature can't get built one way during
@@ -230,11 +237,7 @@ API_URL = "https://your-backend.onrender.com"
 cd backend && python -m pytest
 ```
 
-```bash
-cd frontend && python -m pytest
-```
-
-53 tests. GitHub Actions runs them plus ruff on every push, and builds both
+45 tests. GitHub Actions runs them plus ruff on every push, and builds both
 Docker images.
 
 ## Settings
@@ -287,10 +290,7 @@ backend/
   drift.py       PSI calculation
   tests/
 frontend/
-  streamlit_app.py   entry point
-  fraudshield/       theme, API client, shared bits
-  pages/             the five dashboard pages
-  tests/
+  streamlit_app.py   the whole dashboard, one page
 notebook/        the original notebook
 scripts/         regenerates the results section of this file
 ```
