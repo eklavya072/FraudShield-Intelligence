@@ -1,0 +1,457 @@
+{
+  "trained_at": "2026-09-18T12:51:49.200048+00:00",
+  "training_seconds": 461.5,
+  "dataset": {
+    "path": "../dataset/PS_20174392719_1491204439457_log.csv",
+    "rows": 6362620,
+    "fraud": 8213,
+    "fraud_rate": 0.001290820448180152,
+    "source": "Kaggle PaySim1 (simulated mobile money transactions)"
+  },
+  "split": {
+    "strategy": "temporal on `step` (hour index)",
+    "train_max_step": 281,
+    "val_max_step": 355,
+    "train_rows": 3820599,
+    "val_rows": 1293285,
+    "test_rows": 1248736
+  },
+  "model": {
+    "algorithm": "XGBClassifier",
+    "scale_pos_weight": 1.0,
+    "params": {
+      "objective": "binary:logistic",
+      "base_score": null,
+      "booster": null,
+      "callbacks": null,
+      "colsample_bylevel": null,
+      "colsample_bynode": null,
+      "colsample_bytree": 0.9,
+      "device": null,
+      "early_stopping_rounds": null,
+      "enable_categorical": true,
+      "eval_metric": "aucpr",
+      "feature_types": null,
+      "feature_weights": null,
+      "gamma": null,
+      "grow_policy": null,
+      "importance_type": null,
+      "interaction_constraints": null,
+      "learning_rate": 0.1,
+      "max_bin": null,
+      "max_cat_threshold": null,
+      "max_cat_to_onehot": null,
+      "max_delta_step": null,
+      "max_depth": 6,
+      "max_leaves": null,
+      "min_child_weight": 5,
+      "missing": NaN,
+      "monotone_constraints": null,
+      "multi_strategy": null,
+      "n_estimators": 400,
+      "n_jobs": -1,
+      "num_parallel_tree": null,
+      "random_state": 27,
+      "reg_alpha": null,
+      "reg_lambda": null,
+      "sampling_method": null,
+      "scale_pos_weight": 1.0,
+      "subsample": 0.9,
+      "tree_method": "hist",
+      "validate_parameters": null,
+      "verbosity": null
+    },
+    "feature_names": [
+      "hour_of_day",
+      "types",
+      "amount",
+      "oldbalanceorig",
+      "newbalanceorig",
+      "oldbalancedest",
+      "newbalancedest",
+      "isflaggedfraud",
+      "error_balance_orig",
+      "error_balance_dest",
+      "orig_emptied",
+      "amount_to_balance_ratio",
+      "dest_was_empty"
+    ],
+    "feature_importances": {
+      "newbalanceorig": 0.7400894165039062,
+      "oldbalanceorig": 0.2526189982891083,
+      "error_balance_orig": 0.0039021431002765894,
+      "amount": 0.0012679850915446877,
+      "dest_was_empty": 0.0006895151454955339,
+      "orig_emptied": 0.0005515507655218244,
+      "amount_to_balance_ratio": 0.0003316219081170857,
+      "error_balance_dest": 0.00027375106583349407,
+      "types": 0.00015445133612956852,
+      "oldbalancedest": 6.16145262029022e-05,
+      "newbalancedest": 3.647770790848881e-05,
+      "hour_of_day": 2.2606196580454707e-05,
+      "isflaggedfraud": 0.0
+    }
+  },
+  "threshold_selection": {
+    "method": "minimise expected cost on validation",
+    "review_cost_per_alert": 25.0,
+    "missed_fraud_cost": "full transaction amount",
+    "chosen_threshold": 0.09,
+    "validation_cost": 19250.0,
+    "cost_curve": [
+      {
+        "threshold": 0.001,
+        "cost": 25150.0
+      },
+      {
+        "threshold": 0.021,
+        "cost": 19350.0
+      },
+      {
+        "threshold": 0.041,
+        "cost": 19300.0
+      },
+      {
+        "threshold": 0.061,
+        "cost": 19300.0
+      },
+      {
+        "threshold": 0.081,
+        "cost": 19275.0
+      },
+      {
+        "threshold": 0.101,
+        "cost": 19250.0
+      },
+      {
+        "threshold": 0.121,
+        "cost": 19250.0
+      },
+      {
+        "threshold": 0.141,
+        "cost": 19250.0
+      },
+      {
+        "threshold": 0.161,
+        "cost": 19250.0
+      },
+      {
+        "threshold": 0.181,
+        "cost": 19250.0
+      },
+      {
+        "threshold": 0.201,
+        "cost": 19250.0
+      },
+      {
+        "threshold": 0.221,
+        "cost": 19250.0
+      },
+      {
+        "threshold": 0.241,
+        "cost": 19250.0
+      },
+      {
+        "threshold": 0.261,
+        "cost": 19250.0
+      },
+      {
+        "threshold": 0.281,
+        "cost": 19250.0
+      },
+      {
+        "threshold": 0.301,
+        "cost": 19250.0
+      },
+      {
+        "threshold": 0.321,
+        "cost": 19250.0
+      },
+      {
+        "threshold": 0.341,
+        "cost": 19250.0
+      },
+      {
+        "threshold": 0.361,
+        "cost": 19250.0
+      },
+      {
+        "threshold": 0.381,
+        "cost": 19250.0
+      },
+      {
+        "threshold": 0.401,
+        "cost": 19250.0
+      },
+      {
+        "threshold": 0.421,
+        "cost": 19250.0
+      },
+      {
+        "threshold": 0.441,
+        "cost": 19250.0
+      },
+      {
+        "threshold": 0.461,
+        "cost": 19250.0
+      },
+      {
+        "threshold": 0.481,
+        "cost": 19250.0
+      },
+      {
+        "threshold": 0.501,
+        "cost": 19250.0
+      },
+      {
+        "threshold": 0.521,
+        "cost": 19250.0
+      },
+      {
+        "threshold": 0.541,
+        "cost": 19250.0
+      },
+      {
+        "threshold": 0.561,
+        "cost": 19250.0
+      },
+      {
+        "threshold": 0.581,
+        "cost": 19250.0
+      },
+      {
+        "threshold": 0.601,
+        "cost": 19250.0
+      },
+      {
+        "threshold": 0.621,
+        "cost": 19250.0
+      },
+      {
+        "threshold": 0.641,
+        "cost": 19250.0
+      },
+      {
+        "threshold": 0.661,
+        "cost": 19250.0
+      },
+      {
+        "threshold": 0.681,
+        "cost": 19250.0
+      },
+      {
+        "threshold": 0.701,
+        "cost": 19250.0
+      },
+      {
+        "threshold": 0.721,
+        "cost": 19250.0
+      },
+      {
+        "threshold": 0.741,
+        "cost": 19250.0
+      },
+      {
+        "threshold": 0.761,
+        "cost": 19250.0
+      },
+      {
+        "threshold": 0.781,
+        "cost": 19250.0
+      },
+      {
+        "threshold": 0.801,
+        "cost": 19250.0
+      },
+      {
+        "threshold": 0.821,
+        "cost": 19250.0
+      },
+      {
+        "threshold": 0.841,
+        "cost": 19250.0
+      },
+      {
+        "threshold": 0.861,
+        "cost": 19250.0
+      },
+      {
+        "threshold": 0.881,
+        "cost": 19250.0
+      },
+      {
+        "threshold": 0.901,
+        "cost": 19250.0
+      },
+      {
+        "threshold": 0.921,
+        "cost": 19250.0
+      },
+      {
+        "threshold": 0.941,
+        "cost": 19250.0
+      },
+      {
+        "threshold": 0.961,
+        "cost": 19250.0
+      },
+      {
+        "threshold": 0.981,
+        "cost": 1925158.1199999999
+      }
+    ]
+  },
+  "tuning": [
+    {
+      "scale_pos_weight": 1.0,
+      "val_average_precision": 1.0
+    },
+    {
+      "scale_pos_weight": 34.58,
+      "val_average_precision": 1.0
+    },
+    {
+      "scale_pos_weight": 119.56,
+      "val_average_precision": 0.9999999999999999
+    },
+    {
+      "scale_pos_weight": 1195.55,
+      "val_average_precision": 1.0
+    }
+  ],
+  "test": {
+    "threshold": 0.09,
+    "average_precision": 0.9997727725532181,
+    "roc_auc": 0.9999958827320251,
+    "precision": 1.0,
+    "recall": 0.9995294117647059,
+    "f1": 0.9997646505060014,
+    "confusion_matrix": {
+      "true_negative": 1244486,
+      "false_positive": 0,
+      "false_negative": 2,
+      "true_positive": 4248
+    },
+    "n_transactions": 1248736,
+    "n_fraud": 4250,
+    "fraud_rate": 0.0034034415601055788,
+    "alert_rate": 0.003401839940547882,
+    "alerts_per_1000": 3.401839940547882,
+    "economics": {
+      "review_cost_per_alert": 25.0,
+      "fraud_value_at_risk": 6682881544.5,
+      "fraud_value_caught": 6682128625.2,
+      "fraud_value_missed": 752919.3000001907,
+      "value_detection_rate": 0.9998873361296341,
+      "review_spend": 106200.0,
+      "total_cost_with_model": 859119.3,
+      "total_cost_no_model": 6682881544.5,
+      "net_savings": 6682022425.2
+    }
+  },
+  "test_at_default_threshold_0.5": {
+    "threshold": 0.5,
+    "average_precision": 0.9997727725532181,
+    "roc_auc": 0.9999958827320251,
+    "precision": 1.0,
+    "recall": 0.9995294117647059,
+    "f1": 0.9997646505060014,
+    "confusion_matrix": {
+      "true_negative": 1244486,
+      "false_positive": 0,
+      "false_negative": 2,
+      "true_positive": 4248
+    },
+    "n_transactions": 1248736,
+    "n_fraud": 4250,
+    "fraud_rate": 0.0034034415601055788,
+    "alert_rate": 0.003401839940547882,
+    "alerts_per_1000": 3.401839940547882,
+    "economics": {
+      "review_cost_per_alert": 25.0,
+      "fraud_value_at_risk": 6682881544.5,
+      "fraud_value_caught": 6682128625.2,
+      "fraud_value_missed": 752919.3000001907,
+      "value_detection_rate": 0.9998873361296341,
+      "review_spend": 106200.0,
+      "total_cost_with_model": 859119.3,
+      "total_cost_no_model": 6682881544.5,
+      "net_savings": 6682022425.2
+    }
+  },
+  "trivial_rule_baseline": {
+    "rule": "oldbalanceOrg == amount and newbalanceOrig == 0",
+    "precision": 1.0,
+    "recall": 0.9736470588235294,
+    "f1": 0.9866475917978064,
+    "alert_rate": 0.003313750864874561
+  },
+  "model_lift_over_rule_f1": 0.0131,
+  "feature_set": "full",
+  "feature_set_ablation": {
+    "threshold": 0.008,
+    "average_precision": 0.9780795184839818,
+    "roc_auc": 0.9994321179232892,
+    "precision": 0.5702144880615135,
+    "recall": 0.9945882352941177,
+    "f1": 0.7248563834347937,
+    "confusion_matrix": {
+      "true_negative": 1241300,
+      "false_positive": 3186,
+      "false_negative": 23,
+      "true_positive": 4227
+    },
+    "n_transactions": 1248736,
+    "n_fraud": 4250,
+    "fraud_rate": 0.0034034415601055788,
+    "alert_rate": 0.005936402890602978,
+    "alerts_per_1000": 5.936402890602978,
+    "economics": {
+      "review_cost_per_alert": 25.0,
+      "fraud_value_at_risk": 6682881544.5,
+      "fraud_value_caught": 6679132604.38,
+      "fraud_value_missed": 3748940.1199998856,
+      "value_detection_rate": 0.9994390234070384,
+      "review_spend": 185325.0,
+      "total_cost_with_model": 3934265.12,
+      "total_cost_no_model": 6682881544.5,
+      "net_savings": 6678947279.38
+    },
+    "feature_set": "realistic"
+  },
+  "random_split_control": {
+    "threshold": 0.09,
+    "average_precision": 0.992843162118063,
+    "roc_auc": 0.9963945450300751,
+    "precision": 0.9840656687590535,
+    "recall": 0.9926936190940088,
+    "f1": 0.988360814742968,
+    "confusion_matrix": {
+      "true_negative": 1588569,
+      "false_positive": 33,
+      "false_negative": 15,
+      "true_positive": 2038
+    },
+    "n_transactions": 1590655,
+    "n_fraud": 2053,
+    "fraud_rate": 0.001290663280221041,
+    "alert_rate": 0.0013019793732770462,
+    "alerts_per_1000": 1.3019793732770462,
+    "economics": {
+      "review_cost_per_alert": 25.0,
+      "fraud_value_at_risk": 3199140893.5600004,
+      "fraud_value_caught": 3154054301.23,
+      "fraud_value_missed": 45086592.3300004,
+      "value_detection_rate": 0.985906656246131,
+      "review_spend": 51775.0,
+      "total_cost_with_model": 45138367.330000006,
+      "total_cost_no_model": 3199140893.5600004,
+      "net_savings": 3154002526.2300005
+    }
+  },
+  "environment": {
+    "python": "3.12.4",
+    "xgboost": "3.3.0",
+    "scikit_learn": "1.9.0"
+  }
+}

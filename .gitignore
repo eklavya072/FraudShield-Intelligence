@@ -1,21 +1,21 @@
-# Ignore dataset contents
+# Dataset (~490 MB, download from Kaggle -- see dataset/README.md)
 dataset/*
 !dataset/README.md
+
+# The trained model is committed (421K) so deployments have it without
+# needing the 490MB dataset. The local alert database is not.
+backend/model/*.db
 
 # Python
 __pycache__/
 *.py[cod]
 *.pyo
+.pytest_cache/
+.ruff_cache/
 
 # Virtual environments
 .venv/
 venv/
-
-# macOS
-.DS_Store
-
-# VS Code
-.vscode/
 
 # Jupyter
 .ipynb_checkpoints/
@@ -23,12 +23,11 @@ venv/
 # Environment
 .env
 
-# Logs
-*.log
+# macOS / editors
+.DS_Store
+.vscode/
 
-# Build
+# Logs and builds
+*.log
 build/
 dist/
-
-# Python cache
-.pytest_cache/
