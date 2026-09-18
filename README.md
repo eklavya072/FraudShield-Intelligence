@@ -1,9 +1,31 @@
 # FraudShield Intelligence
 
+[![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-005571?style=flat&logo=fastapi)](https://fastapi.tiangolo.com/)
+[![Streamlit](https://img.shields.io/badge/Streamlit-FF4B4B?style=flat&logo=streamlit&logoColor=white)](https://streamlit.io/)
+[![XGBoost](https://img.shields.io/badge/XGBoost-1798e6?style=flat&logo=xgboost)](https://xgboost.readthedocs.io/)
+[![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=white)](https://www.docker.com/)
+
 Fraud detection on the PaySim dataset, wrapped in an actual app instead of
 just a notebook. XGBoost model behind a FastAPI service, with a Streamlit
 dashboard on top for scoring transactions, working through alerts, batch
 scoring a file, and checking for drift.
+
+**Live:** https://fraudshield-intelligence-evci2hh3g7wzrytqmg848y.streamlit.app
+
+## Screenshots
+
+### Scoring a transaction
+
+<img width="1708" alt="Risk console" src="https://github.com/user-attachments/assets/074bcbfe-bc18-4a4a-834a-e56afca6f262" />
+
+### Result and risk score
+
+<img width="1709" alt="Prediction result" src="https://github.com/user-attachments/assets/fb83b3f0-26b2-428a-b0f2-98038d0fea22" />
+
+### SHAP feature attribution
+
+<img width="680" alt="SHAP explanation" src="https://github.com/user-attachments/assets/1562f901-f5af-436e-9cd3-b8260fae4c1f" />
 
 I started this as a Kaggle-style notebook project and kept going, mostly
 because the notebook version kept giving me results that felt too good. More
@@ -92,6 +114,52 @@ Same model trained on a random split instead scores 0.9928 PR-AUC against 0.9998
 
 <sub>Trained on 6,362,620 rows (8,213 fraud) in 462s, xgboost 3.3.0, scikit-learn 1.9.0, scale_pos_weight 1</sub>
 <!-- METRICS:END -->
+
+## The three models I tried
+
+From the notebook, trained on the original random split. Keeping these because
+the comparison is still useful, but the numbers are from the split I later
+replaced, so they aren't comparable to the results above.
+
+| Metric | Logistic Regression | Random Forest | XGBoost |
+|---|---|---|---|
+| Accuracy | 99.90% | 99.97% | 99.98% |
+| Precision | 65.06% | 98.02% | 96.60% |
+| Recall | 48.63% | 78.59% | 85.98% |
+| F1 | 55.66% | 87.24% | 90.98% |
+| False negatives | 1,070 | 446 | 292 |
+
+XGBoost won on recall and F1, which is what matters when the classes are this
+imbalanced, so that's what the app uses.
+
+## Input features
+
+| Feature | What it is |
+|---|---|
+| Step | Hours since the first transaction |
+| Transaction type | CASH_IN, CASH_OUT, PAYMENT, DEBIT, TRANSFER |
+| Amount | Transaction amount |
+| Sender balance before / after | Sender's balance either side of the transaction |
+| Receiver balance before / after | Receiver's balance either side of the transaction |
+| Flagged fraud | Rule based flag from the source system |
+
+The model also builds a few features from these: hour of day, the leftover when
+the balances don't add up, whether the sender was emptied, and the amount
+relative to the sender's balance. See `backend/features.py`.
+
+## Tech stack
+
+| Part | What |
+|---|---|
+| Language | Python 3.12 |
+| ML | XGBoost, scikit-learn |
+| Explanations | SHAP |
+| Backend | FastAPI |
+| Frontend | Streamlit |
+| Storage | SQLite |
+| Containers | Docker, Docker Compose |
+| Deployed on | Render (backend), Streamlit Community Cloud (frontend) |
+| CI | GitHub Actions |
 
 ## How it fits together
 
