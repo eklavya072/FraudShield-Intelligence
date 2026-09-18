@@ -1,238 +1,225 @@
-# 🛡️ FraudShield Intelligence
+# FraudShield Intelligence
 
-**Enterprise-Grade Real-Time Financial Fraud Detection Platform**
+Fraud detection on the PaySim dataset, wrapped in an actual app instead of
+just a notebook. XGBoost model behind a FastAPI service, with a Streamlit
+dashboard on top for scoring transactions, working through alerts, batch
+scoring a file, and checking for drift.
 
-[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-005571?style=flat&logo=fastapi)](https://fastapi.tiangolo.com/)
-[![Streamlit](https://img.shields.io/badge/Streamlit-FF4B4B?style=flat&logo=streamlit&logoColor=white)](https://streamlit.io/)
-[![XGBoost](https://img.shields.io/badge/XGBoost-1798e6?style=flat&logo=xgboost)](https://xgboost.readthedocs.io/)
-[![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=white)](https://www.docker.com/)
+I started this as a Kaggle-style notebook project and kept going, mostly
+because the notebook version kept giving me results that felt too good. More
+on that below.
 
-FraudShield Intelligence is an end-to-end machine learning platform engineered to detect fraudulent financial transactions with ultra-low latency. By pairing an optimized extreme gradient boosting framework with a scalable asynchronous REST API and an intuitive analytical dashboard, the platform delivers real-time risk scoring alongside model explainability powered by Explainable AI (XAI) paradigms.
+Note that PaySim is simulated data, not real transactions, so treat the
+numbers here as a best case.
 
----
+## Things I changed after the first version
 
-##  Live Demo
+The notebook is still in `notebook/` but it isn't how the model gets trained
+anymore. Three things in it were wrong for this problem.
 
-| Service | URL |
-|---|---|
-| **Application** | https://fraudshield-intelligence-evci2hh3g7wzrytqmg848y.streamlit.app |
+**The train/test split was random.** The `step` column is an hour counter over
+a 30 day simulation, so a random split trains on hour 500 and tests on hour
+200. No real fraud system gets to see the future. `train.py` splits on time
+instead.
 
+**Accuracy and F1 at a 0.5 threshold.** Only 0.13% of the rows are fraud, so a
+model that always says "not fraud" is 99.87% accurate. I switched the main
+metric to PR-AUC (average precision), which actually moves when the model gets
+better.
 
----
+**The imbalance never got handled.** The notebook says a workaround is needed
+and then doesn't apply one. `train.py` tunes `scale_pos_weight` against
+validation PR-AUC.
 
-##  Overview
+I also stopped using 0.5 as the cutoff. Missing a fraud costs you the whole
+transaction amount, a false alarm costs one analyst review, and those aren't
+close to equal. `train.py` sweeps thresholds against a cost function and picks
+the cheapest one.
 
-FraudShield Intelligence is a production-ready machine learning system designed to identify potentially fraudulent financial transactions in real time. The project goes beyond a single model — it systematically trains and benchmarks three classifiers (Logistic Regression, Random Forest, and XGBoost) on a 6.3M+ transaction dataset, with XGBoost selected as the final model based on superior recall and F1 performance on the highly imbalanced fraud detection task.
+The same idea carries into the app: the review queue sorts alerts by expected
+loss (probability x amount) rather than by probability, so a 60% chance on
+$80,000 gets looked at before a 98% chance on $40.
 
-The platform combines a high-performance classification backend with a modern web interface and REST API, enabling users to evaluate transaction risk through an intuitive dashboard — with SHAP-powered explanations for every prediction.
+## The problem with this dataset
 
----
+This is the part I'd want someone to read.
 
-## Application Preview
+My first proper training run came back with 100% precision and 100% recall,
+which is not a thing that happens. So I went looking for why.
 
-### Home Page
+PaySim creates a fraudulent transaction by emptying the sender's account.
+Across all 6.3 million rows:
 
+| | `oldbalanceOrg == amount` and `newbalanceOrig == 0` |
+| --- | --- |
+| Fraud | 97.7% |
+| Not fraud | 0.0% |
 
-<img width="1708" height="1017" alt="Screenshot 2026-06-29 at 2 49 45 AM" src="https://github.com/user-attachments/assets/074bcbfe-bc18-4a4a-834a-e56afca6f262" />
+So you can separate the classes with a two line if statement. Any model that
+gets features built on that will look perfect without having learned anything
+about fraud.
 
+`train.py` now reports that rule as a baseline next to the model, and refits
+without those features so you can see the difference. Both numbers are below.
 
-### Prediction Result
+I'm leaving this at the top rather than in a limitations section because a
+near perfect score on a public dataset is usually a property of the dataset.
+The parts of this project that would survive contact with real data are the
+threshold logic, the queue, and the drift monitoring, not the accuracy.
 
-<img width="1709" height="1014" alt="Screenshot 2026-06-29 at 2 51 08 AM" src="https://github.com/user-attachments/assets/fb83b3f0-26b2-428a-b0f2-98038d0fea22" />
+## Results
 
+<!-- METRICS:START -->
+Tested on the last 1,248,736 transactions (everything after hour 355), which the model never saw while training or while picking the threshold.
 
-### SHAP Explainability
-<img width="680" height="814" alt="Screenshot 2026-06-29 at 2 53 18 AM" src="https://github.com/user-attachments/assets/1562f901-f5af-436e-9cd3-b8260fae4c1f" />
+| Metric | Value |
+| --- | --- |
+| PR-AUC (average precision) | 0.9998 |
+| Recall | 100.0% |
+| Precision | 100.0% |
+| ROC-AUC | 1.0000 |
+| Alerts per 1,000 transactions | 3.40 |
+| Fraud value caught | 100.0% ($6.68B of $6.68B) |
+| Savings vs. no model | $6.68B |
 
+The alert cutoff is 0.0900, not 0.5. It comes from minimising cost on the validation set, where a false alarm costs $25 of review time and a missed fraud costs the full amount. At 0.5 the same model gets 100.0% recall and saves $6.68B, against 100.0% and $6.68B at the chosen point.
 
----
+How much of this is real: the two line rule `oldbalanceOrg == amount and newbalanceOrig == 0` on its own gets 100.0% precision and 97.4% recall on the same test set, F1 of 0.987. The model gets 1.000, so it adds +0.013.
 
-##  Features
+Dropping the three balance features that encode that rule (`--feature-set realistic`) gives PR-AUC 0.9781, precision 57.0%, recall 99.5%, and 5.9 alerts per 1,000 rows instead of 3.4. That difference is how much of the headline number came from the simulator rather than from anything the model learned.
 
-- Real-time fraud prediction via REST API
-- Rigorous multi-model training and evaluation pipeline
-- XGBoost classifier selected through benchmarked comparison
-- Interactive Streamlit frontend dashboard
-- FastAPI backend with Swagger UI documentation
-- SHAP Explainable AI — per-prediction feature attribution
-- Docker and Docker Compose support
-- Cloud deployment (Render + Streamlit Community Cloud)
-- Confidence score visualization
-- Transaction summary dashboard
+Same model trained on a random split instead scores 0.9928 PR-AUC against 0.9998 here: -0.0069, so the random split didn't inflate anything here. PaySim puts most of its fraud in the later hours, which are the ones the time based test set uses, so that window is denser in fraud and a bit easier. The time based split is still the right one, it just isn't where the optimism is on this dataset. Run `python train.py --compare-random-split` to reproduce.
 
----
+<sub>Trained on 6,362,620 rows (8,213 fraud) in 462s, xgboost 3.3.0, scikit-learn 1.9.0, scale_pos_weight 1</sub>
+<!-- METRICS:END -->
 
-##  Model Selection & Empirical analysis
-
-Three classifiers were trained and rigorously evaluated to identify the best performer for fraud detection — where **recall** is the critical metric due to the severe class imbalance inherent in financial fraud datasets.
-
-### Model Comparison
-
-| Metric | Logistic Regression | Random Forest | **XGBoost** |
-|---|---|---|---|
-| Accuracy | Baseline | 99.97% | **99.98%** |
-| Precision | Baseline | 98.02% | 96.60% |
-| Recall | Baseline | 78.59% | **85.98%** |
-| F1 Score | Baseline | 87.24% | **90.98%** |
-| False Negatives | High | 446 | **292** |
-
-### XGBoost — Selected Model
-
-| Metric | Score |
-|--------|-------|
-| Accuracy | 99.978% |
-| Precision | 96.60% |
-| **Recall** | **85.98%** |
-| **F1 Score** | **90.98%** |
-
-```
-Confusion Matrix:
-                   Predicted Legitimate   Predicted Fraud
-Actual Legitimate        1,588,509               63
-Actual Fraud                   292            1,791
-```
-
-XGBoost was selected for its superior recall and F1 score — catching the highest proportion of actual fraudulent transactions while maintaining strong precision. Its gradient boosting framework handles class imbalance more effectively, delivering a **7.4-point recall improvement** over Random Forest and catching **154 additional fraudulent transactions** per evaluation cycle.
-
----
-
-##  System Architecture
+## How it fits together
 
 ```
-           User
-             │
-             ▼
-  Streamlit Frontend
-  (Streamlit Community Cloud)
-             │
-       REST API Call
-             │
-             ▼
-    FastAPI Backend
-       (Render)
-             │
-             ▼
-  XGBoost Fraud Detection Model
-       + SHAP Explainer
-             │
-             ▼
-  Fraud Prediction + Feature Attributions
+Streamlit dashboard (:8501)          FastAPI service (:8000)
+  Risk console                 --->    POST /predict
+  Review queue                         POST /predict/batch
+  Batch scoring                        GET  /alerts
+  Drift monitor                        POST /alerts/{id}/decision
+  Model card                           GET  /drift, /metrics, /health
+                                              |
+                                   XGBoost + SHAP
+                                   SQLite alert queue
+                                   PSI reference profile
 ```
 
----
+`backend/features.py` builds the features, and training, single scoring and
+batch scoring all import it. That way a feature can't get built one way during
+training and another way at serving time. There's a test for it.
 
-##  Tech Stack
+## Running it
 
-| Category | Technology |
-|---|---|
-| Language | Python |
-| Machine Learning | XGBoost, Scikit-learn |
-| Backend | FastAPI |
-| Frontend | Streamlit |
-| Explainability | SHAP |
-| API Documentation | Swagger UI |
-| Containerization | Docker & Docker Compose |
-| Cloud Deployment | Render (backend), Streamlit Community Cloud (frontend) |
-| Version Control | Git & GitHub |
-
----
-
-##  Input Features
-
-| Feature | Description |
-|---|---|
-| Step | Hours elapsed since first transaction |
-| Transaction Type | CASH_IN, CASH_OUT, PAYMENT, DEBIT, TRANSFER |
-| Amount | Transaction amount (USD) |
-| Sender Balance Before | Sender's account balance before transaction |
-| Sender Balance After | Sender's account balance after transaction |
-| Receiver Balance Before | Receiver's account balance before transaction |
-| Receiver Balance After | Receiver's account balance after transaction |
-| Flagged Fraud | Rule-based fraud indicator from source system |
-
----
-
-##  Project Structure
-
-```
-FraudShield-Intelligence/
-│
-├── backend/
-│   ├── app.py                          # FastAPI application & prediction endpoints
-│   ├── credit_fraud_xgb.pkl            # Trained XGBoost model artifact
-│   ├── requirements.txt
-│   └── Dockerfile
-│
-├── frontend/
-│   ├── streamlit_app.py                # Streamlit UI & SHAP visualization
-│   ├── requirements.txt
-│   └── Dockerfile
-│
-├── notebook/
-│   └── Credit_Card_Fraud_Detection.ipynb   # Full training & benchmarking pipeline
-│
-├── dataset/
-│   └── README.md                       # Dataset download instructions
-│
-├── docker-compose.yml
-└── README.md
-```
-
----
-
-##  Running Locally
-
-**Clone the repository**
-
-```bash
-git clone https://github.com/eklavya072/FraudShield-Intelligence.git
-cd FraudShield-Intelligence
-```
-
-**Backend**
-
-```bash
-cd backend
-pip install -r requirements.txt
-uvicorn app:app --reload
-```
-
-**Frontend** *(in a separate terminal)*
-
-```bash
-cd frontend
-pip install -r requirements.txt
-streamlit run streamlit_app.py
-```
-
----
-
-##  Docker
-
-Run the full stack with a single command:
+With Docker:
 
 ```bash
 docker compose up --build
 ```
 
----
+Dashboard on <http://localhost:8501>, API docs on
+<http://localhost:8000/docs>.
 
-##  Dataset
+Without Docker:
 
-This project uses the **PaySim** synthetic financial transaction dataset — a simulation of mobile money transactions designed for fraud detection research.
+```bash
+python -m venv .venv && source .venv/bin/activate
+pip install -r backend/requirements-dev.txt -r frontend/requirements.txt
+```
 
-Due to GitHub file size limitations, the dataset is not included in this repository. Download it from Kaggle and place it inside the `dataset/` directory before running the training notebook.
+The trained model is committed, so you only need the dataset if you want to
+retrain. If you do, download [PaySim](https://www.kaggle.com/datasets/ealaxi/paysim1)
+into `dataset/` and run:
 
----
+```bash
+cd backend && python train.py
+```
 
-##  Explainable AI with SHAP
+Then start both services:
 
-FraudShield Intelligence integrates **SHAP (SHapley Additive exPlanations)** to provide per-prediction transparency. For every transaction evaluated, SHAP computes the contribution of each individual feature to the final prediction — making the model auditable and interpretable rather than a black box.
+```bash
+cd backend && uvicorn app:app --reload
+```
 
-This is particularly important in financial applications, where regulators and end users require justification for risk classifications.
+```bash
+cd frontend && API_URL=http://127.0.0.1:8000 streamlit run streamlit_app.py
+```
 
----
+The dashboard gets its endpoint from `API_URL`.
 
+## Tests
 
+```bash
+cd backend && python -m pytest
+```
 
+```bash
+cd frontend && python -m pytest
+```
+
+53 tests. GitHub Actions runs them plus ruff on every push, and builds both
+Docker images.
+
+## Settings
+
+| Variable | Default | What it does |
+| --- | --- | --- |
+| `API_URL` | `http://127.0.0.1:8000` | Where the dashboard looks for the API |
+| `FRAUDSHIELD_API_KEY` | unset | If set, calls need an `X-API-Key` header |
+| `RATE_LIMIT_PER_MINUTE` | `120` | Per IP limit. In memory, so single instance only |
+| `MAX_BATCH_SIZE` | `5000` | Row limit on `/predict/batch` |
+| `MODEL_DIR` | `backend/model` | Model, metrics and profile location |
+| `FRAUDSHIELD_DB` | `backend/model/fraudshield.db` | Alert database |
+| `LOG_LEVEL` | `INFO` | Backend logging |
+
+If your review costs aren't $25, retrain with
+`python train.py --review-cost 50` and the threshold moves with it.
+
+## A note on the SHAP explanations
+
+`/predict` returns SHAP values when it can, and `"available": false` with a
+reason when it can't. The first version of this had a fallback that made up
+attribution numbers from hardcoded constants whenever SHAP failed to import,
+and returned them in the same format as the real ones. That's worse than
+returning nothing, because you can't tell them apart and you'd act on them.
+There's a test covering it now.
+
+## What this doesn't do
+
+- The data is simulated, so the numbers are a ceiling, not an estimate.
+- Every transaction is scored on its own. No account history, no velocity
+  features, no device or counterparty information, which is most of what real
+  fraud detection actually runs on.
+- The $25 review cost is made up. Change it and the operating point changes.
+- No fairness testing. PaySim has no demographic columns, so there was nothing
+  to test. Real data would need this before going anywhere near production.
+- Rate limiting is in process, so it only works with one worker. Redis if you
+  run more.
+- PSI catches distribution shift, not accuracy drops. Real labels come back
+  weeks later from chargebacks. The realised precision number on the queue
+  page is the closest thing here to a live signal.
+
+## Files
+
+```
+backend/
+  features.py    feature building, shared by everything
+  train.py       training, evaluation, threshold selection
+  app.py         FastAPI service
+  store.py       SQLite alert queue
+  drift.py       PSI calculation
+  tests/
+frontend/
+  streamlit_app.py   entry point
+  fraudshield/       theme, API client, shared bits
+  pages/             the five dashboard pages
+  tests/
+notebook/        the original notebook
+scripts/         regenerates the results section of this file
+```
+
+Dataset: [PaySim1](https://www.kaggle.com/datasets/ealaxi/paysim1), 6,362,620
+transactions, 8,213 of them fraud. Not committed, see `dataset/README.md`.

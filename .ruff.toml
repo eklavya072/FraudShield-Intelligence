@@ -1,0 +1,10 @@
+line-length = 100
+target-version = "py312"
+
+[lint]
+select = ["E", "F", "I", "UP", "B", "W"]
+ignore = ["B008"]  # FastAPI's Depends()/Header() defaults are the documented idiom.
+
+[lint.per-file-ignores]
+"backend/tests/*" = ["E402"]  # sys.path juggling before imports is deliberate there.
+"frontend/streamlit_app.py" = ["E402"]  # set_page_config must run before other imports.

@@ -1,15 +1,32 @@
-version: "3.9"
-
 services:
 
   backend:
     build: ./backend
     ports:
       - "8000:8000"
+    environment:
+      # Leave unset locally. Set it to require X-API-Key on every call.
+      FRAUDSHIELD_API_KEY: ${FRAUDSHIELD_API_KEY:-}
+      RATE_LIMIT_PER_MINUTE: ${RATE_LIMIT_PER_MINUTE:-120}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    volumes:
+      # Keeps the model and the alert database across rebuilds.
+      - ./backend/model:/app/model
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
 
   frontend:
     build: ./frontend
     ports:
       - "8501:8501"
+    environment:
+      # Container name, not a hardcoded URL.
+      API_URL: http://backend:8000
+      FRAUDSHIELD_API_KEY: ${FRAUDSHIELD_API_KEY:-}
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
