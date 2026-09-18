@@ -20,12 +20,28 @@ class ApiError(RuntimeError):
     """Raised when the backend is unreachable or returns an error."""
 
 
+def _setting(name: str, default: str | None = None) -> str | None:
+    """Env var first, then Streamlit secrets.
+
+    Streamlit Cloud has no way to set environment variables directly, you set
+    secrets instead, so check both.
+    """
+    value = os.getenv(name)
+    if value:
+        return value
+    try:
+        return st.secrets[name]
+    except Exception:
+        # No secrets file, or the key isn't in it. Both are fine locally.
+        return default
+
+
 def base_url() -> str:
-    return os.getenv("API_URL", DEFAULT_BASE_URL).rstrip("/")
+    return (_setting("API_URL") or DEFAULT_BASE_URL).rstrip("/")
 
 
 def _headers() -> dict:
-    key = os.getenv("FRAUDSHIELD_API_KEY")
+    key = _setting("FRAUDSHIELD_API_KEY")
     return {"X-API-Key": key} if key else {}
 
 

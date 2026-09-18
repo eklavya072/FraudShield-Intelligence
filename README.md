@@ -148,7 +148,13 @@ cd backend && uvicorn app:app --reload
 cd frontend && API_URL=http://127.0.0.1:8000 streamlit run streamlit_app.py
 ```
 
-The dashboard gets its endpoint from `API_URL`.
+The dashboard gets its endpoint from `API_URL`, or from a Streamlit secret of
+the same name when running on Streamlit Cloud, which has no way to set
+environment variables directly. Secrets there look like:
+
+```toml
+API_URL = "https://your-backend.onrender.com"
+```
 
 ## Tests
 
