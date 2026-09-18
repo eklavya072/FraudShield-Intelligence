@@ -68,7 +68,8 @@ def render(card: dict) -> str:
             "`oldbalanceOrg == amount and newbalanceOrig == 0` on its own gets "
             f"{rule['precision']:.1%} precision and {rule['recall']:.1%} recall on the "
             f"same test set, F1 of {rule['f1']:.3f}. The model gets "
-            f"{test['f1']:.3f}, so it adds {lift:+.3f}.",
+            f"{test['f1']:.3f}, so it "
+            + (f"adds {lift:+.3f}." if lift >= 0 else f"does {abs(lift):.3f} worse."),
         ]
         if ablation:
             lines += [

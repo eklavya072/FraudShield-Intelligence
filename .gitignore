@@ -1,10 +1,6 @@
-# Dataset (~490 MB, download from Kaggle -- see dataset/README.md)
+# Dataset (~490 MB, download from Kaggle, see dataset/README.md)
 dataset/*
 !dataset/README.md
-
-# The trained model is committed (421K) so deployments have it without
-# needing the 490MB dataset. The local alert database is not.
-backend/model/*.db
 
 # Python
 __pycache__/

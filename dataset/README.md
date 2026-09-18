@@ -23,5 +23,5 @@ statement, and any model given features built on that will look near perfect
 without having learned anything.
 
 `train.py` reports that rule as a baseline next to the model, and refits
-without those features so the difference is visible. See the Model card page in
-the dashboard, or the results section of the main README.
+without those features so the difference is visible. Both numbers are in the
+results section of the main README.

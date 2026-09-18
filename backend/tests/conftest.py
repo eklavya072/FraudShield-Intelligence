@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import sys
 from pathlib import Path
 
@@ -16,7 +15,6 @@ BACKEND = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BACKEND))
 
 from features import FEATURE_NAMES, RAW_FIELDS, build_features  # noqa: E402
-from train import build_reference_profile  # noqa: E402
 
 
 def synthetic_transactions(n: int = 800, seed: int = 0) -> pd.DataFrame:
@@ -62,23 +60,17 @@ def model_dir(tmp_path_factory) -> Path:
         },
         directory / "fraud_model.joblib",
     )
-    (directory / "metrics.json").write_text(json.dumps({"test": {"average_precision": 0.9}}))
-    (directory / "reference_profile.json").write_text(
-        json.dumps(build_reference_profile(X, model.predict_proba(X)[:, 1]))
-    )
     return directory
 
 
 @pytest.fixture
-def client(model_dir, tmp_path, monkeypatch):
+def client(model_dir, monkeypatch):
     from fastapi.testclient import TestClient
 
     monkeypatch.setenv("MODEL_DIR", str(model_dir))
-    monkeypatch.setenv("FRAUDSHIELD_DB", str(tmp_path / "test.db"))
     monkeypatch.setenv("RATE_LIMIT_PER_MINUTE", "10000")
 
-    for module in ("app", "store"):
-        sys.modules.pop(module, None)
+    sys.modules.pop("app", None)
     import app as app_module
 
     with TestClient(app_module.app) as test_client:

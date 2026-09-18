@@ -11,10 +11,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-# Model and alert database both live in /app/model.
-RUN useradd --create-home --uid 1000 fraudshield \
-    && mkdir -p /app/model \
-    && chown -R fraudshield:fraudshield /app
+RUN useradd --create-home --uid 1000 fraudshield && chown -R fraudshield:fraudshield /app
 USER fraudshield
 
 EXPOSE 8000

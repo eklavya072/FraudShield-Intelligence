@@ -120,26 +120,7 @@ st.markdown(
         color: var(--blue-2);
     }
 
-    .system-live {
-        border: 1px solid #273142;
-        background: #0a0d14;
-        color: #aebbd0;
-        padding: 0.45rem 1rem;
-        border-radius: 999px;
-        font-size: 0.72rem;
-        letter-spacing: 0.16em;
-        text-transform: uppercase;
-    }
 
-    .live-dot {
-        display: inline-block;
-        width: 8px;
-        height: 8px;
-        border-radius: 999px;
-        background: var(--green);
-        margin-right: 0.6rem;
-        box-shadow: 0 0 14px rgba(53, 242, 155, 0.85);
-    }
 
     .page-title {
         margin: 1.2rem 0 1.6rem;
@@ -352,32 +333,9 @@ st.markdown(
         border-radius: 999px;
     }
 
-    .status {
-        display: inline-block;
-        border-radius: 3px;
-        padding: 0.25rem 0.55rem;
-        font-size: 0.7rem;
-        font-weight: 800;
-        letter-spacing: 0.04em;
-    }
 
-    .status.blocked {
-        color: #ffc5c0;
-        border: 1px solid rgba(255, 155, 149, 0.35);
-        background: rgba(255, 155, 149, 0.12);
-    }
 
-    .status.cleared {
-        color: #35f29b;
-        border: 1px solid rgba(53, 242, 155, 0.28);
-        background: rgba(53, 242, 155, 0.08);
-    }
 
-    .status.flagged {
-        color: #7bb5ff;
-        border: 1px solid rgba(59, 130, 246, 0.35);
-        background: rgba(59, 130, 246, 0.11);
-    }
 
     @media (max-width: 900px) {
         .page-title {
@@ -437,7 +395,7 @@ def render_title():
     )
 
 
-def render_summary(reference_id, selected_type, amount, sender_delta, velocity):
+def render_summary(reference_id, selected_type, amount, sender_delta):
     delta_class = "negative" if sender_delta < 0 else "positive"
     st.markdown(
         f"""
@@ -447,7 +405,6 @@ def render_summary(reference_id, selected_type, amount, sender_delta, velocity):
             <div class="summary-row"><span>Transaction Type</span><span class="summary-value">{selected_type}</span></div>
             <div class="summary-row"><span>Amount</span><span class="summary-value">{money(amount)}</span></div>
             <div class="summary-row"><span>Net Liquidity Change</span><span class="summary-value {delta_class}">{money(sender_delta)}</span></div>
-            <div class="summary-row"><span>Velocity Check</span><span class="summary-value positive">{velocity}</span></div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -657,7 +614,6 @@ if "last_transaction" not in st.session_state:
         "selected_type": "Cash In",
         "amount": 0.0,
         "sender_delta": 0.0,
-        "velocity": "Normal",
     }
 
 if submitted:
@@ -676,7 +632,6 @@ if submitted:
             "selected_type": selected_type,
             "amount": amount,
             "sender_delta": sender_delta,
-            "velocity": "Normal",
         }
     except Exception as exc:
         st.error("Could not connect to the FastAPI server.")
@@ -690,7 +645,6 @@ with summary_slot.container():
         summary["selected_type"],
         summary["amount"],
         summary["sender_delta"],
-        summary["velocity"],
     )
 
 with right:

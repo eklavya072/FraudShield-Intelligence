@@ -190,28 +190,6 @@ def fit_model(X_train, y_train, scale_pos_weight, seed):
     return model
 
 
-def build_reference_profile(X_train: pd.DataFrame, train_scores: np.ndarray) -> dict:
-    """Decile edges from the training data, so PSI has something to compare to."""
-    profile = {"features": {}}
-    for column in X_train.columns:
-        values = X_train[column].to_numpy()
-        edges = np.unique(np.quantile(values, np.linspace(0, 1, 11)))
-        counts, _ = np.histogram(values, bins=edges)
-        profile["features"][column] = {
-            "edges": [float(e) for e in edges],
-            "proportions": [float(c) for c in counts / max(counts.sum(), 1)],
-            "mean": float(values.mean()),
-        }
-
-    score_edges = np.linspace(0, 1, 11)
-    score_counts, _ = np.histogram(train_scores, bins=score_edges)
-    profile["score"] = {
-        "edges": [float(e) for e in score_edges],
-        "proportions": [float(c) for c in score_counts / max(score_counts.sum(), 1)],
-    }
-    return profile
-
-
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--data", default="../dataset/PS_20174392719_1491204439457_log.csv")
@@ -324,10 +302,12 @@ def main() -> None:
     )
     lift = test_metrics["f1"] - rule["f1"]
     print(f"  Model F1 minus rule F1     : {lift:+.4f}")
-    if lift < 0.02:
-        print("  NOTE: the model barely beats the rule. On PaySim this is expected --")
-        print("        the simulator drains the sender's account exactly when it")
-        print("        generates fraud, so the classes are separable by construction.")
+    if lift < -0.02:
+        print("  NOTE: the rule beats the model. Worth looking at before shipping it.")
+    elif lift < 0.02:
+        print("  NOTE: the model barely beats the rule. Expected on PaySim, since the")
+        print("        simulator empties the sender's account whenever it generates")
+        print("        fraud, so the classes come apart almost for free.")
 
     # Refit on the other feature set, so the model card can show what happens
     # without the balance features that give the simulator away.
@@ -372,9 +352,6 @@ def main() -> None:
         print(f"  PR-AUC under temporal split: {test_metrics['average_precision']:.4f}")
         inflation = random_split_metrics["average_precision"] - test_metrics["average_precision"]
         print(f"  Optimism from random split : {inflation:+.4f} PR-AUC")
-
-    train_scores = model.predict_proba(X_train)[:, 1]
-    profile = build_reference_profile(X_train, train_scores)
 
     bundle = {
         "model": model,
@@ -441,9 +418,8 @@ def main() -> None:
         },
     }
     (out_dir / "metrics.json").write_text(json.dumps(metrics, indent=2, default=str))
-    (out_dir / "reference_profile.json").write_text(json.dumps(profile, indent=2))
 
-    print(f"\nWrote {out_dir / 'fraud_model.joblib'}, metrics.json, reference_profile.json")
+    print(f"\nWrote {out_dir / 'fraud_model.joblib'} and metrics.json")
     print(f"Total {time.perf_counter() - started:.1f}s")
 
 
