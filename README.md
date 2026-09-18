@@ -19,44 +19,29 @@
 
 ---
 
-## Contents
+## About
 
-- [Overview](#overview)
-- [Screenshots](#screenshots)
-- [Results](#results)
-- [What I found in the dataset](#what-i-found-in-the-dataset)
-- [What I changed after the first version](#what-i-changed-after-the-first-version)
-- [Model comparison](#model-comparison)
-- [Architecture](#architecture)
-- [Input features](#input-features)
-- [Tech stack](#tech-stack)
-- [Getting started](#getting-started)
-- [Tests](#tests)
-- [Configuration](#configuration)
-- [Limitations](#limitations)
-- [Project structure](#project-structure)
-- [About me](#about-me)
+**FraudShield Intelligence** is an end-to-end fraud detection system built on
+the PaySim mobile money dataset: 6,362,620 transactions with a 0.129% fraud
+rate.
 
----
+It covers the full path from raw data to a running service. An XGBoost
+classifier is trained with a time based split, PR-AUC as the headline metric,
+and a decision threshold chosen by expected cost rather than left at 0.5. The
+model is served by a FastAPI endpoint that returns a fraud probability, an
+alert decision and the SHAP values behind it, and a Streamlit dashboard sits
+on top for trying it out. Both services are containerised, and GitHub Actions
+runs the tests and builds the images on every push.
 
-## Overview
+The repository also documents something that turned up during training: PaySim
+generates fraud by emptying the sender's account, which makes the two classes
+separable by a two line rule. Rather than reporting the near perfect score that
+follows from that, `train.py` benchmarks the model against the rule on every
+run and refits without the features that encode it, so the gap is visible. See
+[what I found in the dataset](#what-i-found-in-the-dataset).
 
-This started as a Kaggle notebook and turned into something I kept working on,
-mostly because the notebook version kept giving me results that looked too
-good to be true. They were, and finding out why taught me more than the model
-did.
-
-What's here now:
-
-- An XGBoost classifier trained on the PaySim dataset, 6.3M transactions with
-  a 0.129% fraud rate
-- A FastAPI service that scores a transaction and returns SHAP values for it
-- A Streamlit dashboard for trying it out
-- Docker for both services, and GitHub Actions running the tests
-
-PaySim is simulated data rather than real transactions, so the numbers below
-are a ceiling rather than an estimate. The [dataset section](#what-i-found-in-the-dataset)
-explains why that matters more than I expected.
+PaySim is simulated data rather than real transactions, so the numbers here
+are a ceiling rather than an estimate.
 
 ---
 
@@ -359,28 +344,6 @@ notebook/            the original exploratory notebook
 scripts/             regenerates the results section of this file
 dataset/             where the Kaggle CSV goes
 ```
-
----
-
-## About me
-
-I'm Eklavya, and I built this while teaching myself machine learning.
-
-I started it as a straightforward classification exercise and ended up
-spending most of my time on the parts around the model: how to evaluate it
-honestly, where to put the decision threshold, and why a suspiciously good
-score usually means something is wrong with the data rather than right with
-the model. Working that out was the most useful thing I got from the project,
-and it's why the dataset problem is documented near the top of this README
-instead of quietly left out.
-
-I'm interested in applied machine learning, particularly problems where the
-cost of being wrong isn't symmetric.
-
-- GitHub: [@eklavya072](https://github.com/eklavya072)
-- Email: eklavyasingh2106@gmail.com
-
-Feedback and issues are welcome.
 
 ---
 
