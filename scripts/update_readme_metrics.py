@@ -1,6 +1,6 @@
-"""Rewrites the results section of README.md from backend/model/metrics.json.
+"""Regenerates the results section of README.md from backend/model/metrics.json.
 
-Saves me copying numbers by hand and forgetting to update them.
+Avoids transcribing figures by hand and letting them go stale.
 Run after training: python scripts/update_readme_metrics.py
 """
 
@@ -35,9 +35,9 @@ def render(card: dict) -> str:
     ablation = card.get("feature_set_ablation")
 
     lines = [
-        f"Tested on the last {split['test_rows']:,} transactions (everything after "
-        f"hour {split['val_max_step']}), which the model never saw while training or "
-        f"while picking the threshold.",
+        f"Held-out test partition: the final {split['test_rows']:,} transactions "
+        f"(all rows after hour {split['val_max_step']}), unseen during training and "
+        f"threshold selection.",
         "",
         "| Metric | Value |",
         "| --- | --- |",
@@ -46,73 +46,81 @@ def render(card: dict) -> str:
         f"| Precision | {test['precision']:.1%} |",
         f"| ROC-AUC | {test['roc_auc']:.4f} |",
         f"| Alerts per 1,000 transactions | {test['alerts_per_1000']:.2f} |",
-        f"| Fraud value caught | {econ['value_detection_rate']:.1%} "
+        f"| Fraud value recovered | {econ['value_detection_rate']:.1%} "
         f"({money(econ['fraud_value_caught'])} of "
         f"{money(econ['fraud_value_at_risk'])}) |",
-        f"| Savings vs. no model | {money(econ['net_savings'])} |",
+        f"| Net benefit vs. no model | {money(econ['net_savings'])} |",
         "",
-        f"The alert cutoff is {threshold['chosen_threshold']:.4f}, not 0.5. It comes "
-        f"from minimising cost on the validation set, where a false alarm costs "
-        f"${threshold['review_cost_per_alert']:,.0f} of review time and a missed "
-        f"fraud costs the full amount. At 0.5 the same model gets "
-        f"{default['recall']:.1%} recall and saves "
-        f"{money(default['economics']['net_savings'])}, against "
-        f"{test['recall']:.1%} and {money(econ['net_savings'])} at the chosen point.",
+        f"**Operating point.** Alerts are raised at a probability of "
+        f"{threshold['chosen_threshold']:.4f} rather than 0.5, selected by minimising "
+        f"expected cost on the validation partition under a "
+        f"${threshold['review_cost_per_alert']:,.0f} review cost and a false-negative "
+        f"cost equal to the transaction amount. At the 0.5 default the same model "
+        f"records {default['recall']:.1%} recall and "
+        f"{money(default['economics']['net_savings'])} net benefit, against "
+        f"{test['recall']:.1%} and {money(econ['net_savings'])} at the selected "
+        f"threshold.",
     ]
 
     if rule:
         lift = card.get("model_lift_over_rule_f1", 0.0)
         lines += [
             "",
-            "How much of this is real: the two line rule "
-            "`oldbalanceOrg == amount and newbalanceOrig == 0` on its own gets "
+            "**Rule baseline.** The two-line rule "
+            "`oldbalanceOrg == amount and newbalanceOrig == 0` achieves "
             f"{rule['precision']:.1%} precision and {rule['recall']:.1%} recall on the "
-            f"same test set, F1 of {rule['f1']:.3f}. The model gets "
-            f"{test['f1']:.3f}, so it "
-            + (f"adds {lift:+.3f}." if lift >= 0 else f"does {abs(lift):.3f} worse."),
+            f"same partition (F1 {rule['f1']:.3f}) against the model's "
+            f"{test['f1']:.3f}, "
+            + (
+                f"a margin of {lift:+.3f}."
+                if lift >= 0
+                else f"placing the model {abs(lift):.3f} below the baseline."
+            ),
         ]
         if ablation:
             lines += [
                 "",
-                "Dropping the three balance features that encode that rule "
-                f"(`--feature-set {ablation['feature_set']}`) gives PR-AUC "
+                "**Feature ablation.** Refitting without the three balance features "
+                f"(`--feature-set {ablation['feature_set']}`) yields PR-AUC "
                 f"{ablation['average_precision']:.4f}, precision "
                 f"{ablation['precision']:.1%}, recall {ablation['recall']:.1%}, and "
-                f"{ablation['alerts_per_1000']:.1f} alerts per 1,000 rows instead of "
-                f"{test['alerts_per_1000']:.1f}. That difference is how much of the "
-                "headline number came from the simulator rather than from anything "
-                "the model learned.",
+                f"{ablation['alerts_per_1000']:.1f} alerts per 1,000 transactions "
+                f"against {test['alerts_per_1000']:.1f}. The difference quantifies the "
+                "contribution of the simulator's generation rule to the headline "
+                "figures.",
             ]
 
     if control:
         gap = control["average_precision"] - test["average_precision"]
         if gap > 0.001:
             verdict = (
-                f"{gap:+.4f} higher, which is the usual result and the reason not to split randomly"
+                f"{gap:+.4f} in favour of the random split, the expected direction and "
+                "the reason it is unsuitable here"
             )
         else:
             verdict = (
-                f"{gap:+.4f}, so the random split didn't inflate anything here. PaySim "
-                "puts most of its fraud in the later hours, which are the ones the "
-                "time based test set uses, so that window is denser in fraud and a bit "
-                "easier. The time based split is still the right one, it just isn't "
-                "where the optimism is on this dataset"
+                f"a difference of {gap:+.4f}. The random split does not inflate the "
+                "result on this dataset: PaySim concentrates fraud in later hours, "
+                "which constitute the temporal test window, making that partition "
+                "denser in positives and marginally easier. The temporal split remains "
+                "the correct design, as the only one that reflects deployment "
+                "conditions"
             )
         lines += [
             "",
-            f"Same model trained on a random split instead scores "
+            f"**Split control.** The same model trained on a random split scores "
             f"{control['average_precision']:.4f} PR-AUC against "
-            f"{test['average_precision']:.4f} here: {verdict}. "
-            "Run `python train.py --compare-random-split` to reproduce.",
+            f"{test['average_precision']:.4f}: {verdict}. Reproduce with "
+            "`python train.py --compare-random-split`.",
         ]
 
     lines += [
         "",
-        f"<sub>Trained on {card['dataset']['rows']:,} rows "
-        f"({card['dataset']['fraud']:,} fraud) in "
-        f"{card['training_seconds']:.0f}s, xgboost "
-        f"{card['environment']['xgboost']}, scikit-learn "
-        f"{card['environment']['scikit_learn']}, scale_pos_weight "
+        f"<sub>Trained on {card['dataset']['rows']:,} transactions "
+        f"({card['dataset']['fraud']:,} fraudulent) in "
+        f"{card['training_seconds']:.0f}s · xgboost "
+        f"{card['environment']['xgboost']} · scikit-learn "
+        f"{card['environment']['scikit_learn']} · scale_pos_weight "
         f"{card['model']['scale_pos_weight']:.0f}</sub>",
     ]
     return "\n".join(lines)

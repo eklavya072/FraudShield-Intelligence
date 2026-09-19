@@ -19,11 +19,13 @@
 
 ---
 
-Enter a transaction, get back a fraud probability, an alert decision, and the
-five features that drove it.
+A transaction is submitted to the API, which returns a fraud probability, an
+alert decision against a cost-optimised threshold, and the five features that
+contributed most to the score.
 
-Trained on [PaySim](https://www.kaggle.com/datasets/ealaxi/paysim1): 6,362,620
-simulated mobile money transactions, 8,213 of them fraud (0.129%).
+The model is trained on [PaySim](https://www.kaggle.com/datasets/ealaxi/paysim1),
+a simulation of mobile money transfers containing 6,362,620 transactions of
+which 8,213 are fraudulent (0.129%).
 
 <img width="1708" alt="Risk console" src="https://github.com/user-attachments/assets/074bcbfe-bc18-4a4a-834a-e56afca6f262" />
 
@@ -32,7 +34,7 @@ simulated mobile money transactions, 8,213 of them fraud (0.129%).
 ## Results
 
 <!-- METRICS:START -->
-Tested on the last 1,248,736 transactions (everything after hour 355), which the model never saw while training or while picking the threshold.
+Held-out test partition: the final 1,248,736 transactions (all rows after hour 355), unseen during training and threshold selection.
 
 | Metric | Value |
 | --- | --- |
@@ -41,82 +43,77 @@ Tested on the last 1,248,736 transactions (everything after hour 355), which the
 | Precision | 100.0% |
 | ROC-AUC | 1.0000 |
 | Alerts per 1,000 transactions | 3.40 |
-| Fraud value caught | 100.0% ($6.68B of $6.68B) |
-| Savings vs. no model | $6.68B |
+| Fraud value recovered | 100.0% ($6.68B of $6.68B) |
+| Net benefit vs. no model | $6.68B |
 
-The alert cutoff is 0.0900, not 0.5. It comes from minimising cost on the validation set, where a false alarm costs $25 of review time and a missed fraud costs the full amount. At 0.5 the same model gets 100.0% recall and saves $6.68B, against 100.0% and $6.68B at the chosen point.
+**Operating point.** Alerts are raised at a probability of 0.0900 rather than 0.5, selected by minimising expected cost on the validation partition under a $25 review cost and a false-negative cost equal to the transaction amount. At the 0.5 default the same model records 100.0% recall and $6.68B net benefit, against 100.0% and $6.68B at the selected threshold.
 
-How much of this is real: the two line rule `oldbalanceOrg == amount and newbalanceOrig == 0` on its own gets 100.0% precision and 97.4% recall on the same test set, F1 of 0.987. The model gets 1.000, so it adds +0.013.
+**Rule baseline.** The two-line rule `oldbalanceOrg == amount and newbalanceOrig == 0` achieves 100.0% precision and 97.4% recall on the same partition (F1 0.987) against the model's 1.000, a margin of +0.013.
 
-Dropping the three balance features that encode that rule (`--feature-set realistic`) gives PR-AUC 0.9781, precision 57.0%, recall 99.5%, and 5.9 alerts per 1,000 rows instead of 3.4. That difference is how much of the headline number came from the simulator rather than from anything the model learned.
+**Feature ablation.** Refitting without the three balance features (`--feature-set realistic`) yields PR-AUC 0.9781, precision 57.0%, recall 99.5%, and 5.9 alerts per 1,000 transactions against 3.4. The difference quantifies the contribution of the simulator's generation rule to the headline figures.
 
-Same model trained on a random split instead scores 0.9928 PR-AUC against 0.9998 here: -0.0069, so the random split didn't inflate anything here. PaySim puts most of its fraud in the later hours, which are the ones the time based test set uses, so that window is denser in fraud and a bit easier. The time based split is still the right one, it just isn't where the optimism is on this dataset. Run `python train.py --compare-random-split` to reproduce.
+**Split control.** The same model trained on a random split scores 0.9928 PR-AUC against 0.9998: a difference of -0.0069. The random split does not inflate the result on this dataset: PaySim concentrates fraud in later hours, which constitute the temporal test window, making that partition denser in positives and marginally easier. The temporal split remains the correct design, as the only one that reflects deployment conditions. Reproduce with `python train.py --compare-random-split`.
 
-<sub>Trained on 6,362,620 rows (8,213 fraud) in 462s, xgboost 3.3.0, scikit-learn 1.9.0, scale_pos_weight 1</sub>
+<sub>Trained on 6,362,620 transactions (8,213 fraudulent) in 462s · xgboost 3.3.0 · scikit-learn 1.9.0 · scale_pos_weight 1</sub>
 <!-- METRICS:END -->
 
 ---
 
-## The dataset has a shortcut in it
+## Label leakage in PaySim
 
-My first training run came back with 100% precision and 100% recall. That
-isn't a thing that happens, so I went looking for the reason.
+PaySim generates a fraudulent transaction by transferring the sender's entire
+balance. The resulting signature is close to deterministic:
 
-PaySim generates a fraudulent transaction by emptying the sender's account.
-Across all 6.3M rows:
-
-| `oldbalanceOrg == amount` and `newbalanceOrig == 0` | Fraud | Not fraud |
+| Condition | Fraudulent rows | Legitimate rows |
 |---|---|---|
-| Share of rows matching | **97.7%** | **0.0%** |
+| `oldbalanceOrg == amount` and `newbalanceOrig == 0` | **97.7%** | **0.0%** |
 
-The classes separate with a two line `if` statement. Any model given features
-built on that looks near perfect without having learned anything about fraud.
+The classes are therefore separable by a two-line rule, and any model given
+features derived from that relationship will approach perfect scores without
+learning a generalisable fraud pattern. Published results on this dataset that
+report near-perfect metrics without a baseline comparison are usually
+measuring this artefact.
 
-So every training run now reports two extra things:
+Two controls run on every training pass to quantify it:
 
-1. **A rule baseline.** That `if` statement scored as if it were a model, so
-   there is always something to beat.
-2. **An ablation.** The same model refit without the three balance features
-   that encode the rule, which shows how much of the score came from the
-   simulator.
+| Control | Purpose |
+|---|---|
+| **Rule baseline** | The `if` statement above, scored as a classifier, establishing the floor any model must clear |
+| **Feature ablation** | The same model refit without the three balance features that encode the relationship |
 
-Both are in the [results](#results) above.
-
-This is near the top rather than buried in limitations, because a near perfect
-score on a public dataset is usually the dataset's doing. What would still
-hold up on real transactions is the evaluation setup and the threshold logic,
-not the accuracy.
-
----
-
-## How it is trained
-
-Three decisions, and why:
-
-**Split on time, not at random.** `step` is an hour counter over a 30 day
-simulation. A random split trains on hour 500 and tests on hour 200, which no
-deployed system ever gets to do. Training uses the earliest 60% of rows,
-validation the next 20%, test the last 20%.
-
-**PR-AUC as the headline metric.** At a 0.129% fraud rate, a model that always
-answers "not fraud" is 99.87% accurate, and ROC-AUC sits near the top of its
-range regardless. Average precision is the one that moves when the model
-improves.
-
-**A threshold chosen by cost.** Missing a fraud costs the full transaction
-amount. A false alarm costs one analyst review, set at $25. Those are nowhere
-near equal, so `train.py` sweeps candidate thresholds against that cost
-function and picks the cheapest instead of leaving it at 0.5.
-
-Class imbalance is handled by tuning `scale_pos_weight` against validation
-PR-AUC.
+Both appear in [Results](#results). The engineering that transfers to real
+transaction data is the evaluation design and the threshold selection; the
+reported accuracy does not.
 
 ---
 
-## Models tried
+## Methodology
 
-From the original notebook, on the random split I later replaced. Kept for the
-comparison, but not comparable to the results above.
+**Temporal split.** The `step` column is an hour index across a 30-day
+simulation. A random split permits training on hour 500 and evaluating on hour
+200, which no deployed system can do. Partitions are taken in chronological
+order: the earliest 60% of rows for training, the next 20% for validation, the
+final 20% held out for test.
+
+**Average precision as the primary metric.** At a 0.129% positive rate, a
+classifier that never predicts fraud achieves 99.87% accuracy, and ROC-AUC
+saturates. PR-AUC is the metric that responds to genuine improvement.
+
+**Cost-based decision threshold.** A false negative costs the full transaction
+amount; a false positive costs one analyst review, set at $25. Given that
+asymmetry, 0.5 is arbitrary. Candidate thresholds are swept against the cost
+function and the minimum is selected on the validation partition.
+
+**Class imbalance.** `scale_pos_weight` is tuned against validation PR-AUC
+rather than fixed by assumption.
+
+---
+
+## Model selection
+
+Evaluated in the original notebook on a random split, which was later replaced
+by the temporal split described above. Retained for comparison; not directly
+comparable to the figures in [Results](#results).
 
 | Metric | Logistic Regression | Random Forest | XGBoost |
 |---|---|---|---|
@@ -126,8 +123,8 @@ comparison, but not comparable to the results above.
 | F1 | 55.66% | 87.24% | **90.98%** |
 | False negatives | 1,070 | 446 | **292** |
 
-XGBoost won on recall and F1, which is what matters at this level of
-imbalance.
+XGBoost was selected on recall and F1, the metrics that matter at this level of
+class imbalance.
 
 ---
 
@@ -145,40 +142,41 @@ Streamlit dashboard                FastAPI service
                          probability · decision · top 5 factors
 ```
 
-| Endpoint | Returns |
+| Endpoint | Response |
 |---|---|
-| `POST /predict` | Fraud probability, alert decision, expected loss, SHAP factors |
-| `GET /health` | Which model is loaded and whether SHAP is working |
+| `POST /predict` | Fraud probability, alert decision, expected loss, SHAP attributions |
+| `GET /health` | Loaded model metadata and explainer availability |
 
-`backend/features.py` builds the features and is imported by both training and
-serving, so a feature cannot be computed one way at training time and another
-at prediction time. A test checks the two paths agree. The saved model also
-records which columns it was fitted on, and the API serves exactly those.
+Feature construction lives in `backend/features.py` and is imported by both the
+training script and the service, preventing divergence between training-time
+and serving-time features; a test asserts the two code paths agree. The
+serialised model records the columns it was fitted on, and the API constructs
+exactly those.
 
 ---
 
 ## Features
 
-Eight fields go in:
+Eight fields are supplied per request:
 
 | Field | Description |
 |---|---|
-| Step | Hour of the transaction |
+| Step | Hour index of the transaction |
 | Transaction type | CASH_IN, CASH_OUT, DEBIT, PAYMENT, TRANSFER |
 | Amount | Transaction amount |
-| Sender balance before / after | Sender's balance either side of the transaction |
-| Receiver balance before / after | Receiver's balance either side of the transaction |
-| Flagged fraud | Rule based flag from the source system |
+| Sender balance before / after | Originating balance either side of the transaction |
+| Receiver balance before / after | Destination balance either side of the transaction |
+| Flagged fraud | Rule-based indicator from the source system |
 
-Five more are derived from them:
+Five further features are derived:
 
-| Derived | Why it exists |
+| Derived feature | Rationale |
 |---|---|
-| Hour of day | Raw `step` doesn't survive a time based split, since every test value falls outside the training range |
-| Sender ledger mismatch | Balances should satisfy `new = old - amount`. Fraud rows often don't |
-| Receiver ledger mismatch | The same check on the receiving side |
-| Sender emptied | Whether the account went to exactly zero |
-| Amount vs sender balance | How much of the available balance moved |
+| Hour of day | Raw `step` does not transfer across a temporal split, as every test value falls outside the training range |
+| Sender ledger mismatch | Balances should satisfy `new = old - amount`; fraudulent rows frequently violate this |
+| Receiver ledger mismatch | The equivalent check on the destination account |
+| Sender emptied | Whether the originating balance reached exactly zero |
+| Amount to balance ratio | Proportion of the available balance moved |
 
 ---
 
@@ -190,7 +188,8 @@ Five more are derived from them:
 docker compose up --build
 ```
 
-Dashboard on <http://localhost:8501>, API docs on <http://localhost:8000/docs>.
+Dashboard on <http://localhost:8501>, API documentation on
+<http://localhost:8000/docs>.
 
 **Local**
 
@@ -209,7 +208,7 @@ cd frontend && API_URL=http://127.0.0.1:8000 streamlit run streamlit_app.py
 
 **Retraining**
 
-The trained model is committed, so the dataset is only needed to retrain.
+The trained model is committed, so the dataset is required only for retraining.
 Download [PaySim](https://www.kaggle.com/datasets/ealaxi/paysim1) into
 `dataset/`, then:
 
@@ -219,10 +218,10 @@ cd backend && python train.py
 
 | Flag | Effect |
 |---|---|
-| `--review-cost 50` | Change what a false alarm costs. The threshold moves with it |
-| `--feature-set realistic` | Drop the balance features that encode the shortcut |
-| `--compare-random-split` | Also train on a random split, for comparison |
-| `--nrows 500000` | Train on a slice, for a quick run |
+| `--review-cost 50` | Adjusts the cost of a false positive; the threshold moves accordingly |
+| `--feature-set realistic` | Excludes the balance features that encode the leakage |
+| `--compare-random-split` | Additionally trains on a random split for comparison |
+| `--nrows 500000` | Trains on a subset for a faster run |
 
 **Tests**
 
@@ -230,9 +229,9 @@ cd backend && python train.py
 cd backend && python -m pytest
 ```
 
-27 tests covering feature building, the time based split, the threshold sweep
-against a brute force version, the rule baseline, and the API. GitHub Actions
-runs these plus ruff on every push and builds both images.
+27 tests covering feature construction, the temporal split, the threshold sweep
+against a brute-force implementation, the rule baseline, and the API. GitHub
+Actions runs the suite and ruff on every push, and builds both images.
 
 ---
 
@@ -240,13 +239,13 @@ runs these plus ruff on every push and builds both images.
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `API_URL` | `http://127.0.0.1:8000` | Where the dashboard looks for the API |
-| `MODEL_DIR` | `backend/model` | Where the model and metrics live |
-| `RATE_LIMIT_PER_MINUTE` | `120` | Per IP cap on `/predict`. In memory, single worker only |
-| `LOG_LEVEL` | `INFO` | Backend logging |
+| `API_URL` | `http://127.0.0.1:8000` | API endpoint used by the dashboard |
+| `MODEL_DIR` | `backend/model` | Location of the model and metrics |
+| `RATE_LIMIT_PER_MINUTE` | `120` | Per-IP cap on `/predict`; in-process, single worker only |
+| `LOG_LEVEL` | `INFO` | Backend log level |
 
-Streamlit Cloud can't set environment variables, so the dashboard also reads
-`API_URL` from secrets:
+Streamlit Cloud does not support environment variables, so the dashboard also
+resolves `API_URL` from secrets:
 
 ```toml
 API_URL = "https://your-backend.onrender.com"
@@ -256,17 +255,18 @@ API_URL = "https://your-backend.onrender.com"
 
 ## Limitations
 
-- **The data is simulated.** Every number here is a ceiling, not an estimate.
-- **No account history.** Each transaction is scored alone. A real system would
-  have account age, recent activity, device fingerprints and counterparty
-  information, which is most of what actually catches fraud.
-- **The review cost is a placeholder.** $25 per alert is made up. Change it and
-  the operating point changes with it.
-- **No fairness testing.** PaySim has no demographic columns. Real data would
-  need this before deployment.
-- **Explanations degrade rather than fail.** If SHAP can't run, the API returns
-  `available: false` with a reason. An earlier version invented attribution
-  numbers when SHAP was missing, which is worse than returning nothing.
+- **Simulated data.** All reported figures are an upper bound rather than an
+  estimate of production performance.
+- **No entity history.** Transactions are scored in isolation. A production
+  system would incorporate account age, recent activity, device fingerprints
+  and counterparty relationships, which account for most real detection power.
+- **Placeholder review cost.** The $25 per-alert figure is illustrative;
+  changing it moves the operating point.
+- **No fairness evaluation.** PaySim contains no demographic attributes.
+  Disparate impact analysis would be required before deployment on real data.
+- **Graceful explanation degradation.** Where SHAP cannot produce an
+  attribution, the API returns `available: false` with a reason rather than a
+  substitute value.
 
 ---
 
@@ -275,13 +275,13 @@ API_URL = "https://your-backend.onrender.com"
 ```
 backend/
   app.py             FastAPI service
-  features.py        feature building, shared by training and serving
+  features.py        feature construction, shared by training and serving
   train.py           training, evaluation, threshold selection
-  model/             trained model and metrics
+  model/             serialised model and metrics
   tests/
 frontend/
-  streamlit_app.py   the dashboard
-notebook/            the original exploratory notebook
+  streamlit_app.py   dashboard
+notebook/            original exploratory analysis
 scripts/             regenerates the results section of this file
-dataset/             where the Kaggle CSV goes
+dataset/             location for the Kaggle CSV
 ```
